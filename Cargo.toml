@@ -8,5 +8,7 @@ ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-linalg = { version = "0.16.0" }
 ndarray-rand = { version = "0.14.0" }
 ndarray-stats = { version = "0.5.1" }
-poloto = { version = "19.1.2"}
+poloto = { version = "19.1.2" }
 thiserror = { version = "1.0.61" }
+petgraph = "0.6.5"
+plotters = "0.3.5"

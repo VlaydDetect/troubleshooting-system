@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use ndarray::prelude::*;
 use crate::prelude::*;
@@ -75,67 +76,107 @@ fn find_zero_row(mat: &Mat) -> Vec<usize> {
     zero_rows
 }
 
-fn remove_rows(matrix: &Mat, to_remove: &[usize]) -> Result<Mat> {
+pub fn remove_rows<A: Clone>(matrix: &Array2<A>, to_remove: &[usize]) -> Result<Array2<A>> {
     let mut keep_row = vec![true; matrix.nrows()];
     to_remove.iter().for_each(|row| keep_row[*row] = false);
 
     let elements_iter = matrix
         .axis_iter(Axis(0))
         .zip(keep_row.iter())
-        .filter(|(_, keep)| **keep)
-        .flat_map(|(row, _)| row.to_vec());
+        .filter(|(_row, keep)| **keep)
+        .flat_map(|(row, _keep)| row.to_vec());
 
     let new_n_rows = matrix.nrows() - to_remove.len();
-
     Array::from_iter(elements_iter)
         .into_shape((new_n_rows, matrix.ncols())).map_err(|ex| Error::CannotReshapeMatrix)
 }
 
-pub fn find_trouble(mat: &Mat) -> Result<usize> {
-    // let mut mat = remove_rows(mat, find_zero_row(mat).as_slice())?;
-    // let n = num_elems(&mat);
-    //
-    // let mut map = HashMap::<usize, f64>::new();
-    //
-    // for i in 0..mat.nrows() {
-    //     let info = information_of(i, &mat);
-    //     map.insert(i, info);
-    // }
-    //
-    // let max_val = map.values().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-    // let max_elem_ids = map.iter().filter(|&item| f_eq(item.1, &max_val)).map(|item| item.0).collect::<Vec<_>>();
-    //
-    // let first_controlled = {
-    //     let ids_with_units = max_elem_ids.into_iter().map(|&i| (i, row_num_units(&mat, i)));
-    //     let min_units = ids_with_units.clone().map(|elem| elem.1).min().unwrap_or(n); // TODO: What should we do, if all the items with max info have the same number of zeros in the row? Is such a situation possible?
-    //     // TODO: Maybe if there are several such elements, choose the one with average index
-    //     ids_with_units.filter(|&(_, num)| num == min_units).map(|(i, _)| i).collect::<Vec<_>>()[0].clone()
-    // };
-    //
-    // map.clear();
-    //
-    // for i in 0..mat.nrows() {
-    //     if i != first_controlled {
-    //         let info = conditional_information_of(i, first_controlled, &mat);
-    //         map.insert(i, info);
-    //     }
-    // }
-    //
-    // let mut mat = remove_rows(&mat, &[first_controlled]);
-    //
-    // println!("{:?}", mat);
-    //
-    //
-    // Ok(first_controlled)
-
+pub fn get_min_required_elems(mat: &Mat) -> Result<Vec<usize>> {
     let mut mat = remove_rows(mat, find_zero_row(mat).as_slice())?;
-    let mut map = HashMap::<usize, f64>::new();
+    let mut result = vec![];
+    let n = num_elems(&mat);
 
-    for i in 0..mat.nrows() {
-        let info = information_of(i, &mat);
-        map.insert(i, info);
+    let mut k = 0_usize;
+    loop {
+        let mut map = HashMap::<usize, f64>::new();
+
+        if k == 0 {
+            for i in 0..mat.nrows() {
+                let info = information_of(i, &mat);
+                map.insert(i, info);
+            }
+        } else {
+            let prev_controlled_elem = result[if k % 2 != 0 { k - 1 } else { k }];
+            for i in 0..mat.nrows() {
+                let info = conditional_information_of(i, prev_controlled_elem, &mat);
+                map.insert(i, info);
+            }
+        }
+
+        let max_info = map.values().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let elem_ids_with_max_info = map.iter().filter(|&item| f_eq(item.1, &max_info)).map(|item| item.0).collect::<Vec<_>>();
+
+        let controlled_elem = {
+            let ids_with_units = elem_ids_with_max_info.into_iter().map(|&i| (i, row_num_units(&mat, i)));
+            let min_units = ids_with_units.clone().map(|elem| elem.1).min().unwrap_or(n); // TODO: What should we do, if all the items with max info have the same number of zeros in the row? Is such a situation possible?
+            // TODO: Maybe if there are several such elements, choose the one with average index
+            ids_with_units.filter(|&(_, num)| num == min_units).map(|(i, _)| i).collect::<Vec<_>>()[0].clone()
+        };
+
+        result.push(controlled_elem);
+
+        if k % 2 != 0 {
+            mat = remove_rows(&mat, &[controlled_elem])?;
+        } else {
+            k += 1;
+        }
+
+        if mat.nrows() < 3 {
+            break;
+        }
     }
 
 
-    Ok()
+    Ok(result)
+}
+
+fn boolean_tuples(n: usize) -> Vec<Vec<bool>> {
+    (0..1 << n).map(|i| {
+        (0..n).map(|j| (i >> j) & 1 == 1).collect()
+    }).collect()
+}
+
+pub fn make_tree(mat: &Mat) -> Result<HashMap<Vec<bool>, usize>> {
+    let mut elems = get_min_required_elems(mat)?;
+    let tuples = boolean_tuples(elems.len() - 1);
+    let mut map = HashMap::new();
+
+    let rows_to_remove = (0..mat.nrows()).filter(|row| !elems.contains(row)).collect::<Vec<_>>();
+
+    let new_mat = remove_rows(mat, rows_to_remove.as_slice())?;
+    println!("new mat: {new_mat:?}");
+    println!("new mat cols: {:?}", new_mat.columns().into_iter().map(|col| col.to_vec()).collect::<Vec<_>>());
+
+    for t in tuples {
+        // let count = new_mat.columns().into_iter().filter(|col| col.to_vec().as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal).count();
+
+        let mut cols = vec![];
+        for col in new_mat.columns() {
+            let col_vec = col.to_vec();
+            if col_vec.as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal {
+                cols.push(col)
+            }
+        }
+
+        let count = cols.len();
+
+        if count == 0 {
+            // return Err(Error::UnresolvedTree);
+        } else if count == 1 {
+            let (index, _) = mat.columns().into_iter().enumerate().find(|(idx, col)| col.to_vec().as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal).unwrap();
+            map.insert(t, index);
+        }
+    }
+
+    Ok(map)
 }

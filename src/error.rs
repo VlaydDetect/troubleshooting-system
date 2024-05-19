@@ -8,4 +8,6 @@ pub enum Error {
     I32ToBool,
     #[error("")]
     CannotReshapeMatrix,
+    #[error("Number of matching columns when building the tree is zero")]
+    UnresolvedTree,
 }
