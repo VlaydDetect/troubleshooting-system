@@ -1,21 +1,10 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use ndarray::prelude::*;
-use crate::prelude::*;
 use crate::error::{Error, Result};
 use crate::math::{f_eq, log2};
 
 pub type Mat = Array2<bool>;
-
-fn i32_to_bool(i: i32) -> bool {
-    if i == 0 { false } else { true }
-}
-
-impl From<W<Array2<i32>>> for Array2<bool> {
-    fn from(value: W<Array2<i32>>) -> Array2<bool> {
-        value.0.mapv(|elem| i32_to_bool(elem))
-    }
-}
 
 pub fn num_elems(mat: &Mat) -> usize {
     mat.shape()[1]
@@ -76,7 +65,7 @@ fn find_zero_row(mat: &Mat) -> Vec<usize> {
     zero_rows
 }
 
-pub fn remove_rows<A: Clone>(matrix: &Array2<A>, to_remove: &[usize]) -> Result<Array2<A>> {
+pub fn remove_rows(matrix: &Mat, to_remove: &[usize]) -> Result<Mat> {
     let mut keep_row = vec![true; matrix.nrows()];
     to_remove.iter().for_each(|row| keep_row[*row] = false);
 
@@ -93,22 +82,23 @@ pub fn remove_rows<A: Clone>(matrix: &Array2<A>, to_remove: &[usize]) -> Result<
 
 pub fn get_min_required_elems(mat: &Mat) -> Result<Vec<usize>> {
     let mut mat = remove_rows(mat, find_zero_row(mat).as_slice())?;
+    println!("without zero rows: {:?}", mat);
     let mut result = vec![];
     let n = num_elems(&mat);
 
-    let mut k = 0_usize;
+    let mut l = 0_usize;
     loop {
         let mut map = HashMap::<usize, f64>::new();
 
-        if k == 0 {
+        if l == 0 {
             for i in 0..mat.nrows() {
                 let info = information_of(i, &mat);
                 map.insert(i, info);
             }
         } else {
-            let prev_controlled_elem = result[if k % 2 != 0 { k - 1 } else { k }];
-            for i in 0..mat.nrows() {
-                let info = conditional_information_of(i, prev_controlled_elem, &mat);
+            let ids = (0..mat.nrows()).filter(|i| !result.contains(i)).collect::<Vec<_>>();
+            for i in ids {
+                let info = conditional_information_of(i, result[l - 1], &mat);
                 map.insert(i, info);
             }
         }
@@ -125,15 +115,11 @@ pub fn get_min_required_elems(mat: &Mat) -> Result<Vec<usize>> {
 
         result.push(controlled_elem);
 
-        if k % 2 != 0 {
-            mat = remove_rows(&mat, &[controlled_elem])?;
-        } else {
-            k += 1;
-        }
-
-        if mat.nrows() < 3 {
+        if l > mat.nrows() - 2 {
             break;
         }
+
+        l += 1;
     }
 
 
@@ -148,22 +134,23 @@ fn boolean_tuples(n: usize) -> Vec<Vec<bool>> {
 
 pub fn make_tree(mat: &Mat) -> Result<HashMap<Vec<bool>, usize>> {
     let mut elems = get_min_required_elems(mat)?;
+    println!("elems: {:?}", elems);
     let tuples = boolean_tuples(elems.len() - 1);
     let mut map = HashMap::new();
 
     let rows_to_remove = (0..mat.nrows()).filter(|row| !elems.contains(row)).collect::<Vec<_>>();
 
     let new_mat = remove_rows(mat, rows_to_remove.as_slice())?;
-    println!("new mat: {new_mat:?}");
-    println!("new mat cols: {:?}", new_mat.columns().into_iter().map(|col| col.to_vec()).collect::<Vec<_>>());
+    // println!("new mat: {new_mat:?}");
+    // println!("new mat cols: {:?}", new_mat.columns().into_iter().map(|col| col.to_vec()).collect::<Vec<_>>());
 
     for t in tuples {
         // let count = new_mat.columns().into_iter().filter(|col| col.to_vec().as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal).count();
 
         let mut cols = vec![];
         for col in new_mat.columns() {
-            let col_vec = col.to_vec();
-            if col_vec.as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal {
+            let col_vec = &col.to_vec()[1..col.len()];
+            if col_vec.iter().cmp(t.as_slice().iter()) == Ordering::Equal {
                 cols.push(col)
             }
         }
@@ -173,8 +160,17 @@ pub fn make_tree(mat: &Mat) -> Result<HashMap<Vec<bool>, usize>> {
         if count == 0 {
             // return Err(Error::UnresolvedTree);
         } else if count == 1 {
-            let (index, _) = mat.columns().into_iter().enumerate().find(|(idx, col)| col.to_vec().as_slice().iter().cmp(t.as_slice().iter()) == Ordering::Equal).unwrap();
+            let (index, _) = mat.columns()
+                .into_iter()
+                .enumerate()
+                .find(|(idx, col)| {
+                    let col_vec = col.to_vec().into_iter().enumerate().filter(|&(i, _)| elems.contains(&i)).map(|(_, col)| col).collect::<Vec<_>>();
+                    col_vec[1..col_vec.len()].iter().cmp(t.iter()) == Ordering::Equal
+                }).unwrap();
             map.insert(t, index);
+        } else {
+            // TODO: add two bool values corresponding to the last controlled element and repeat all the logic
+            println!("{t:?}")
         }
     }
 

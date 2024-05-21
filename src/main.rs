@@ -4,7 +4,7 @@ mod information_criterion;
 mod error;
 mod prelude;
 mod math;
-mod graph;
+mod splitting_in_half_method;
 
 use information_criterion::*;
 use crate::prelude::{f, W};
@@ -13,21 +13,31 @@ use crate::prelude::{f, W};
 // use plotters::prelude::*;
 
 fn main() {
+    // let matrix = array![
+    //     [0, 1, 1, 1, 1],
+    //     [0, 0, 0, 1, 1],
+    //     [1, 1, 0, 1, 1],
+    //     [1, 1, 0, 0, 1],
+    //     [0, 0, 0, 0, 0],
+    // ];
+
     let matrix = array![
-        [0, 1, 1, 1, 1],
-        [0, 0, 0, 1, 1],
-        [1, 1, 0, 1, 1],
-        [1, 1, 0, 0, 1],
-        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 1, 1, 1, 1, 1, 0],
+        [0, 0, 0, 1, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0, 1, 1, 0],
+        [0, 0, 0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 0]
     ];
-    
-    println!("{:?}", remove_rows(&matrix, &[2, 4]));
 
     let matrix: Array2<bool> = W(matrix).into();
 
     // println!("{:?}", num_elems(&W(matrix).into()))
     // println!("{}", information_of(3, &matrix));
     // println!("Scheme: {:?}", make_tree(&matrix).unwrap())
+    println!("{:?}", 5 / 2)
 
     // let v = vec![false, true, true, true, true, false, false, false, true, true, true, true, false, false, true];
     // let a = Array::from_vec(v).into_shape((3, 5));
