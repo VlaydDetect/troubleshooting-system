@@ -8,4 +8,4 @@ fn get_root_idx(mat: &Mat) -> usize {
     mat.ncols() / 2
 }
 
-pub fn split_in_half(mat: &Mat) -> Result<HashMap<Vec<bool>, usize>> {}
+// pub fn split_in_half(mat: &Mat) -> Result<HashMap<Vec<bool>, usize>> {}

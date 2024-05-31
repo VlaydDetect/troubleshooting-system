@@ -12,3 +12,16 @@ poloto = { version = "19.1.2" }
 thiserror = { version = "1.0.61" }
 petgraph = "0.6.5"
 plotters = "0.3.5"
+
+# graph
+atoi = "2.0.0"
+atomic = "0.6.0"
+bytemuck = "1.14.0"
+byte-slice-cast = "1.2.2"
+delegate = "0.12.0"
+fast-float = "0.2.0"
+log = "0.4.19"
+num_cpus = "1.16.0"
+page_size = "0.6.0"
+parking_lot = "0.12.1"
+rayon = "1.10.0"
